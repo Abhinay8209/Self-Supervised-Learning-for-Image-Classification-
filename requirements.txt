@@ -5,3 +5,4 @@ Pillow
 flask
 opencv-python
 numpy
+gdown
