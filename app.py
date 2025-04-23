@@ -1,10 +1,21 @@
+import os
 import cv2
 import numpy as np
-from tkinter import Tk, filedialog
+import gdown
+import streamlit as st
+from PIL import Image
+
+# Google Drive file ID for YOLO weights
+file_id = "1zT3hJatcXjfQuZBUJvXO7P2eXv1U_qGD"
+weights_path = "yolov3.weights"
+
+# Download the YOLO weights if not already present
+if not os.path.exists(weights_path):
+    url = f"https://drive.google.com/uc?id={file_id}"
+    gdown.download(url, weights_path, quiet=False)
 
 # Load YOLO model
 yolo_config = "yolov3.cfg"
-yolo_weights = "yolov3.weights"
 coco_names = "coco.names"
 
 # Load COCO class labels
@@ -12,33 +23,22 @@ with open(coco_names, "r") as f:
     class_names = [line.strip() for line in f.readlines()]
 
 # Load YOLO network
-net = cv2.dnn.readNet(yolo_weights, yolo_config)
+net = cv2.dnn.readNetFromONNX('yolov3.onnx')
 layer_names = net.getLayerNames()
 output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
 
-# Hide the root Tkinter window
-root = Tk()
-root.withdraw()
+# Streamlit UI
+st.title("YOLO Object Detection with COCO Classes")
+uploaded_file = st.file_uploader("Upload an image", type=["jpg", "png", "jpeg"])
 
-while True:  # Keep running until manually stopped
-    # Open file dialog to select an image
-    image_path = filedialog.askopenfilename(title="Select an Image", filetypes=[("Image Files", "*.jpg *.png *.jpeg")])
-
-    if not image_path:  # If no image is selected, exit the loop
-        print("No image selected. Exiting...")
-        break
-
-    # Load image
-    image = cv2.imread(image_path)
-
-    if image is None:
-        print("Error: Could not read the image. Check the file path!")
-        continue  # Skip and allow another selection
-
-    height, width, channels = image.shape
+if uploaded_file is not None:
+    # Convert image to OpenCV format
+    image = Image.open(uploaded_file).convert("RGB")
+    img_array = np.array(image)
+    height, width = img_array.shape[:2]
 
     # Convert image to YOLO input format
-    blob = cv2.dnn.blobFromImage(image, scalefactor=1/255.0, size=(416, 416), swapRB=True, crop=False)
+    blob = cv2.dnn.blobFromImage(img_array, scalefactor=1/255.0, size=(416, 416), swapRB=True, crop=False)
     net.setInput(blob)
 
     # Run forward pass and get predictions
@@ -49,7 +49,6 @@ while True:  # Keep running until manually stopped
     confidences = []
     class_ids = []
 
-    # Process each detected object
     for output in outputs:
         for detection in output:
             scores = detection[5:]  # Class scores
@@ -61,7 +60,6 @@ while True:  # Keep running until manually stopped
                 center_x, center_y, w, h = (detection[0:4] * np.array([width, height, width, height])).astype("int")
                 x = int(center_x - w / 2)
                 y = int(center_y - h / 2)
-
                 boxes.append([x, y, w, h])
                 confidences.append(float(confidence))
                 class_ids.append(class_id)
@@ -74,14 +72,9 @@ while True:  # Keep running until manually stopped
         x, y, w, h = boxes[i]
         label = f"{class_names[class_ids[i]]}: {confidences[i]:.2f}"
         color = (0, 255, 0)  # Green for humans/objects
-        cv2.rectangle(image, (x, y), (x + w, y + h), color, 2)
-        cv2.putText(image, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+        cv2.rectangle(img_array, (x, y), (x + w, y + h), color, 2)
+        cv2.putText(img_array, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
     # Show the result
-    cv2.imshow("Object Detection", image)
-    
-    # Wait for a key press, close window on 'q' press
-    key = cv2.waitKey(0) & 0xFF
-    cv2.destroyAllWindows()  # Close the window before selecting a new image
+    st.image(img_array, caption="Detected Image", use_column_width=True)
 
-print("Program terminated.")
