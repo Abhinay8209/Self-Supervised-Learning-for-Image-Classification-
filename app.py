@@ -1,84 +1,85 @@
-import os
+import streamlit as st
 import cv2
 import numpy as np
-import gdown
-import streamlit as st
-from PIL import Image
+import os
+import urllib.request
 
-# Google Drive file ID for YOLO weights
-file_id = "1zT3hJatcXjfQuZBUJvXO7P2eXv1U_qGD"
+# Download yolov3.weights if not present
+weights_url = "https://pjreddie.com/media/files/yolov3.weights"
 weights_path = "yolov3.weights"
+cfg_path = "yolov3.cfg"
+names_path = "coco.names"
 
-# Download the YOLO weights if not already present
 if not os.path.exists(weights_path):
-    url = f"https://drive.google.com/uc?id={file_id}"
-    gdown.download(url, weights_path, quiet=False)
+    st.info("Downloading YOLOv3 weights...")
+    urllib.request.urlretrieve(weights_url, weights_path)
+    st.success("Download complete!")
 
-# Load YOLO model
-yolo_config = "yolov3.cfg"
-coco_names = "coco.names"
+# Load YOLO
+net = cv2.dnn.readNet(weights_path, cfg_path)
+classes = []
+with open(names_path, "r") as f:
+    classes = [line.strip() for line in f.readlines()]
 
-# Load COCO class labels
-with open(coco_names, "r") as f:
-    class_names = [line.strip() for line in f.readlines()]
-
-# Load YOLO network
-net = cv2.dnn.readNet("yolov3.weights", "yolov3.cfg")
 layer_names = net.getLayerNames()
-output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
+output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers().flatten()]
 
 # Streamlit UI
 st.title("YOLO Object Detection with COCO Classes")
-uploaded_file = st.file_uploader("Upload an image", type=["jpg", "png", "jpeg"])
+st.markdown("### Upload an image")
+
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    st.write("✅ Image uploaded!")
+    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+    img = cv2.imdecode(file_bytes, 1)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-    try:
-        image = Image.open(uploaded_file).convert("RGB")
-        st.write("✅ Image converted to RGB")
+    st.success("Image uploaded!")
+    st.write(f"Image dimensions: {img.shape[1]}x{img.shape[0]}")
 
-        img_array = np.array(image)
-        height, width = img_array.shape[:2]
-        st.write(f"✅ Image dimensions: {width}x{height}")
+    height, width, channels = img.shape
 
-        blob = cv2.dnn.blobFromImage(img_array, scalefactor=1/255.0, size=(416, 416), swapRB=True, crop=False)
-        net.setInput(blob)
-        st.write("✅ Blob created and set")
+    # Detecting objects
+    blob = cv2.dnn.blobFromImage(img, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
+    net.setInput(blob)
+    outs = net.forward(output_layers)
 
-        outputs = net.forward(output_layers)
-        st.write("✅ YOLO forward pass done")
+    # Info on the screen
+    class_ids = []
+    confidences = []
+    boxes = []
 
-        boxes = []
-        confidences = []
-        class_ids = []
+    for out in outs:
+        for detection in out:
+            scores = detection[5:]
+            class_id = np.argmax(scores)
+            confidence = scores[class_id]
+            if confidence > 0.5:
+                center_x = int(detection[0] * width)
+                center_y = int(detection[1] * height)
+                w = int(detection[2] * width)
+                h = int(detection[3] * height)
 
-        for output in outputs:
-            for detection in output:
-                scores = detection[5:]
-                class_id = np.argmax(scores)
-                confidence = scores[class_id]
+                x = int(center_x - w / 2)
+                y = int(center_y - h / 2)
 
-                if confidence > 0.5:
-                    center_x, center_y, w, h = (detection[0:4] * np.array([width, height, width, height])).astype("int")
-                    x = int(center_x - w / 2)
-                    y = int(center_y - h / 2)
-                    boxes.append([x, y, w, h])
-                    confidences.append(float(confidence))
-                    class_ids.append(class_id)
+                boxes.append([x, y, w, h])
+                confidences.append(float(confidence))
+                class_ids.append(class_id)
 
-        st.write(f"✅ Detections found: {len(boxes)}")
+    indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
 
-        indices = cv2.dnn.NMSBoxes(boxes, confidences, score_threshold=0.5, nms_threshold=0.4)
+    # Draw bounding boxes
+    font = cv2.FONT_HERSHEY_PLAIN
+    colors = np.random.uniform(0, 255, size=(len(classes), 3))
 
-        for i in indices.flatten():
+    for i in range(len(boxes)):
+        if i in indexes:
             x, y, w, h = boxes[i]
-            label = f"{class_names[class_ids[i]]}: {confidences[i]:.2f}"
-            color = (0, 255, 0)
-            cv2.rectangle(img_array, (x, y), (x + w, y + h), color, 2)
-            cv2.putText(img_array, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            label = str(classes[class_ids[i]])
+            color = colors[class_ids[i]]
+            cv2.rectangle(img, (x, y), (x + w, y + h), color, 2)
+            cv2.putText(img, label, (x, y - 10), font, 1, color, 2)
 
-        st.image(img_array, caption="Detected Image", use_column_width=True)
-
-    except Exception as e:
-        st.error(f"❌ Error occurred during detection: {e}")
+    st.image(img, caption="Detected Objects", use_column_width=True)
