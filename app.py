@@ -32,49 +32,53 @@ st.title("YOLO Object Detection with COCO Classes")
 uploaded_file = st.file_uploader("Upload an image", type=["jpg", "png", "jpeg"])
 
 if uploaded_file is not None:
-    # Convert image to OpenCV format
-    image = Image.open(uploaded_file).convert("RGB")
-    img_array = np.array(image)
-    height, width = img_array.shape[:2]
+    st.write("✅ Image uploaded!")
 
-    # Convert image to YOLO input format
-    blob = cv2.dnn.blobFromImage(img_array, scalefactor=1/255.0, size=(416, 416), swapRB=True, crop=False)
-    net.setInput(blob)
+    try:
+        image = Image.open(uploaded_file).convert("RGB")
+        st.write("✅ Image converted to RGB")
 
-    # Run forward pass and get predictions
-    outputs = net.forward(output_layers)
+        img_array = np.array(image)
+        height, width = img_array.shape[:2]
+        st.write(f"✅ Image dimensions: {width}x{height}")
 
-    # Initialize lists for detected objects
-    boxes = []
-    confidences = []
-    class_ids = []
+        blob = cv2.dnn.blobFromImage(img_array, scalefactor=1/255.0, size=(416, 416), swapRB=True, crop=False)
+        net.setInput(blob)
+        st.write("✅ Blob created and set")
 
-    for output in outputs:
-        for detection in output:
-            scores = detection[5:]  # Class scores
-            class_id = np.argmax(scores)
-            confidence = scores[class_id]
+        outputs = net.forward(output_layers)
+        st.write("✅ YOLO forward pass done")
 
-            if confidence > 0.5:  # Confidence threshold
-                # Get bounding box coordinates
-                center_x, center_y, w, h = (detection[0:4] * np.array([width, height, width, height])).astype("int")
-                x = int(center_x - w / 2)
-                y = int(center_y - h / 2)
-                boxes.append([x, y, w, h])
-                confidences.append(float(confidence))
-                class_ids.append(class_id)
+        boxes = []
+        confidences = []
+        class_ids = []
 
-    # Apply Non-Maximum Suppression (NMS) to reduce overlapping boxes
-    indices = cv2.dnn.NMSBoxes(boxes, confidences, score_threshold=0.5, nms_threshold=0.4)
+        for output in outputs:
+            for detection in output:
+                scores = detection[5:]
+                class_id = np.argmax(scores)
+                confidence = scores[class_id]
 
-    # Draw bounding boxes and labels
-    for i in indices.flatten():
-        x, y, w, h = boxes[i]
-        label = f"{class_names[class_ids[i]]}: {confidences[i]:.2f}"
-        color = (0, 255, 0)  # Green for humans/objects
-        cv2.rectangle(img_array, (x, y), (x + w, y + h), color, 2)
-        cv2.putText(img_array, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                if confidence > 0.5:
+                    center_x, center_y, w, h = (detection[0:4] * np.array([width, height, width, height])).astype("int")
+                    x = int(center_x - w / 2)
+                    y = int(center_y - h / 2)
+                    boxes.append([x, y, w, h])
+                    confidences.append(float(confidence))
+                    class_ids.append(class_id)
 
-    # Show the result
-    st.image(img_array, caption="Detected Image", use_column_width=True)
+        st.write(f"✅ Detections found: {len(boxes)}")
 
+        indices = cv2.dnn.NMSBoxes(boxes, confidences, score_threshold=0.5, nms_threshold=0.4)
+
+        for i in indices.flatten():
+            x, y, w, h = boxes[i]
+            label = f"{class_names[class_ids[i]]}: {confidences[i]:.2f}"
+            color = (0, 255, 0)
+            cv2.rectangle(img_array, (x, y), (x + w, y + h), color, 2)
+            cv2.putText(img_array, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+        st.image(img_array, caption="Detected Image", use_column_width=True)
+
+    except Exception as e:
+        st.error(f"❌ Error occurred during detection: {e}")
