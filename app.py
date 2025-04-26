@@ -8,14 +8,17 @@ from PIL import Image
 import streamlit_authenticator as stauth
 
 # ========== Authentication Setup ==========
-# First, hash the passwords
-hashed_passwords = stauth.Hasher(['123', 'abc']).generate()
-
-# Define users
+# Already hashed passwords
 users = {
     "usernames": {
-        "john": {"name": "John Doe", "password": hashed_passwords[0]},
-        "jane": {"name": "Jane Doe", "password": hashed_passwords[1]}
+        "john": {
+            "name": "John Doe",
+            "password": "$2b$12$XcTUE91Z52tTq7kNMDaQYOJuMbI1DHrlyEbtoXUuNBbN6iTOLd5yW"
+        },
+        "jane": {
+            "name": "Jane Doe",
+            "password": "$2b$12$H3YvTzTzBCxIMLMzPC8x7uRxV1J2FJx0zwmMLFKn0.N2AHx93CuCe"
+        }
     }
 }
 
