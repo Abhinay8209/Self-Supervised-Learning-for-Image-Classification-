@@ -1,84 +1,117 @@
+# ========== Imports ==========
 import os
 import cv2
 import numpy as np
 import gdown
 import streamlit as st
 from PIL import Image
+import streamlit_authenticator as stauth
 
-# Google Drive file ID for YOLO weights
-file_id = "1zT3hJatcXjfQuZBUJvXO7P2eXv1U_qGD"
-weights_path = "yolov3.weights"
+# ========== Authentication ==========
+# Define users (you can add more)
+users = {
+    "usernames": {
+        "john": {"name": "John Doe", "password": stauth.Hasher(["123"]).generate()[0]},
+        "jane": {"name": "Jane Doe", "password": stauth.Hasher(["abc"]).generate()[0]}
+    }
+}
 
-# Download the YOLO weights if not already present
-if not os.path.exists(weights_path):
-    url = f"https://drive.google.com/uc?id={file_id}"
-    gdown.download(url, weights_path, quiet=False)
+# Setup authenticator
+authenticator = stauth.Authenticate(
+    users["usernames"],
+    "cookie_name",
+    "signature_key",
+    cookie_expiry_days=1
+)
 
-# Load YOLO model
-yolo_config = "yolov3.cfg"
-coco_names = "coco.names"
+# Login UI
+name, authentication_status, username = authenticator.login('Login', 'main')
 
-# Load COCO class labels
-with open(coco_names, "r") as f:
-    class_names = [line.strip() for line in f.readlines()]
+# ========== App Start ==========
+if authentication_status is False:
+    st.error('Username or password is incorrect')
+elif authentication_status is None:
+    st.warning('Please enter your username and password')
+elif authentication_status:
 
-# Load YOLO network
-net = cv2.dnn.readNet("yolov3.weights", "yolov3.cfg")
-layer_names = net.getLayerNames()
-output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
+    authenticator.logout('Logout', 'sidebar')
+    st.sidebar.success(f"Welcome *{name}*!")
 
-# Streamlit UI
-st.title("YOLO Object Detection with COCO Classes")
-uploaded_file = st.file_uploader("Upload an image", type=["jpg", "png", "jpeg"])
+    # ========== Styling ==========
+    st.markdown(
+        """
+        <h1 style='text-align: center; color: #4CAF50;'>Self-Supervised Learning: YOLO Object Detection</h1>
+        """,
+        unsafe_allow_html=True
+    )
+    st.markdown("---")
 
-if uploaded_file is not None:
-    st.write("✅ Image uploaded!")
+    # ========== YOLO Model Setup ==========
 
-    try:
-        image = Image.open(uploaded_file).convert("RGB")
-        st.write("✅ Image converted to RGB")
+    # Google Drive file ID for YOLO weights
+    file_id = "1zT3hJatcXjfQuZBUJvXO7P2eXv1U_qGD"
+    weights_path = "yolov3.weights"
 
-        img_array = np.array(image)
-        height, width = img_array.shape[:2]
-        st.write(f"✅ Image dimensions: {width}x{height}")
+    # Download YOLO weights if not already present
+    if not os.path.exists(weights_path):
+        url = f"https://drive.google.com/uc?id={file_id}"
+        gdown.download(url, weights_path, quiet=False)
 
-        blob = cv2.dnn.blobFromImage(img_array, scalefactor=1/255.0, size=(416, 416), swapRB=True, crop=False)
-        net.setInput(blob)
-        st.write("✅ Blob created and set")
+    # Load YOLO model
+    yolo_config = "yolov3.cfg"
+    coco_names = "coco.names"
 
-        outputs = net.forward(output_layers)
-        st.write("✅ YOLO forward pass done")
+    # Load COCO class labels
+    with open(coco_names, "r") as f:
+        class_names = [line.strip() for line in f.readlines()]
 
-        boxes = []
-        confidences = []
-        class_ids = []
+    # Load YOLO network
+    net = cv2.dnn.readNet(weights_path, yolo_config)
+    layer_names = net.getLayerNames()
+    output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
 
-        for output in outputs:
-            for detection in output:
-                scores = detection[5:]
-                class_id = np.argmax(scores)
-                confidence = scores[class_id]
+    # ========== Streamlit UI ==========
+    uploaded_file = st.file_uploader("Upload an image 📷", type=["jpg", "png", "jpeg"])
 
-                if confidence > 0.5:
-                    center_x, center_y, w, h = (detection[0:4] * np.array([width, height, width, height])).astype("int")
-                    x = int(center_x - w / 2)
-                    y = int(center_y - h / 2)
-                    boxes.append([x, y, w, h])
-                    confidences.append(float(confidence))
-                    class_ids.append(class_id)
+    if uploaded_file is not None:
+        st.success("✅ Image uploaded successfully!")
 
-        st.write(f"✅ Detections found: {len(boxes)}")
+        try:
+            # Read and prepare the image
+            image = Image.open(uploaded_file).convert("RGB")
+            img_array = np.array(image)
+            height, width = img_array.shape[:2]
 
-        indices = cv2.dnn.NMSBoxes(boxes, confidences, score_threshold=0.5, nms_threshold=0.4)
+            # Create blob from image
+            blob = cv2.dnn.blobFromImage(img_array, scalefactor=1/255.0, size=(416, 416), swapRB=True, crop=False)
+            net.setInput(blob)
+            outputs = net.forward(output_layers)
 
-        for i in indices.flatten():
-            x, y, w, h = boxes[i]
-            label = f"{class_names[class_ids[i]]}: {confidences[i]:.2f}"
-            color = (0, 255, 0)
-            cv2.rectangle(img_array, (x, y), (x + w, y + h), color, 2)
-            cv2.putText(img_array, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            boxes, confidences, class_ids = [], [], []
 
-        st.image(img_array, caption="Detected Image", use_column_width=True)
+            for output in outputs:
+                for detection in output:
+                    scores = detection[5:]
+                    class_id = np.argmax(scores)
+                    confidence = scores[class_id]
+                    if confidence > 0.5:
+                        center_x, center_y, w, h = (detection[0:4] * np.array([width, height, width, height])).astype("int")
+                        x = int(center_x - w / 2)
+                        y = int(center_y - h / 2)
+                        boxes.append([x, y, w, h])
+                        confidences.append(float(confidence))
+                        class_ids.append(class_id)
 
-    except Exception as e:
-        st.error(f"❌ Error occurred during detection: {e}")
+            indices = cv2.dnn.NMSBoxes(boxes, confidences, score_threshold=0.5, nms_threshold=0.4)
+
+            for i in indices.flatten():
+                x, y, w, h = boxes[i]
+                label = f"{class_names[class_ids[i]]}: {confidences[i]:.2f}"
+                color = (0, 255, 0)
+                cv2.rectangle(img_array, (x, y), (x + w, y + h), color, 2)
+                cv2.putText(img_array, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+            st.image(img_array, caption="🔍 Detected Objects", use_column_width=True)
+
+        except Exception as e:
+            st.error(f"❌ Error occurred during detection: {e}")
