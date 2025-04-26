@@ -1,3 +1,4 @@
+# ========== Imports ==========
 import os
 import cv2
 import numpy as np
@@ -30,7 +31,7 @@ authenticator = stauth.Authenticate(
 )
 
 # ========== Login Page ==========
-name, authentication_status, username = authenticator.login('Login', 'main')
+name, authentication_status, username = authenticator.login('Login', location='main')
 
 # ========== Main App ==========
 if authentication_status is False:
