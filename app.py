@@ -1,4 +1,3 @@
-# ========== Imports ==========
 import os
 import cv2
 import numpy as np
@@ -8,23 +7,23 @@ from PIL import Image
 import streamlit_authenticator as stauth
 
 # ========== Authentication Setup ==========
-# Already hashed passwords
-users = {
+credentials = {
     "usernames": {
         "john": {
+            "email": "john@example.com",
             "name": "John Doe",
             "password": "$2b$12$XcTUE91Z52tTq7kNMDaQYOJuMbI1DHrlyEbtoXUuNBbN6iTOLd5yW"
         },
         "jane": {
+            "email": "jane@example.com",
             "name": "Jane Doe",
             "password": "$2b$12$H3YvTzTzBCxIMLMzPC8x7uRxV1J2FJx0zwmMLFKn0.N2AHx93CuCe"
         }
     }
 }
 
-# Setup authenticator
 authenticator = stauth.Authenticate(
-    users["usernames"],
+    credentials,
     "cookie_name",
     "signature_key",
     cookie_expiry_days=1
@@ -55,24 +54,19 @@ elif authentication_status:
     st.markdown("---")
 
     # ========== YOLO Model Setup ==========
-    # Google Drive file ID for YOLO weights
     file_id = "1zT3hJatcXjfQuZBUJvXO7P2eXv1U_qGD"
     weights_path = "yolov3.weights"
 
-    # Download the YOLO weights if not already present
     if not os.path.exists(weights_path):
         url = f"https://drive.google.com/uc?id={file_id}"
         gdown.download(url, weights_path, quiet=False)
 
-    # Load YOLO model
     yolo_config = "yolov3.cfg"
     coco_names = "coco.names"
 
-    # Load COCO class labels
     with open(coco_names, "r") as f:
         class_names = [line.strip() for line in f.readlines()]
 
-    # Load YOLO network
     net = cv2.dnn.readNet(weights_path, yolo_config)
     layer_names = net.getLayerNames()
     output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
@@ -84,12 +78,10 @@ elif authentication_status:
         st.success("✅ Image uploaded successfully!")
 
         try:
-            # Read and prepare the image
             image = Image.open(uploaded_file).convert("RGB")
             img_array = np.array(image)
             height, width = img_array.shape[:2]
 
-            # Create blob from image
             blob = cv2.dnn.blobFromImage(img_array, scalefactor=1/255.0, size=(416, 416), swapRB=True, crop=False)
             net.setInput(blob)
             outputs = net.forward(output_layers)
