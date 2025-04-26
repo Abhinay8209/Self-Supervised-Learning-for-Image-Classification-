@@ -7,12 +7,15 @@ import streamlit as st
 from PIL import Image
 import streamlit_authenticator as stauth
 
-# ========== Authentication ==========
-# Define users (you can add more)
+# ========== Authentication Setup ==========
+# First, hash the passwords
+hashed_passwords = stauth.Hasher(['123', 'abc']).generate()
+
+# Define users
 users = {
     "usernames": {
-        "john": {"name": "John Doe", "password": stauth.Hasher(["123"]).generate()[0]},
-        "jane": {"name": "Jane Doe", "password": stauth.Hasher(["abc"]).generate()[0]}
+        "john": {"name": "John Doe", "password": hashed_passwords[0]},
+        "jane": {"name": "Jane Doe", "password": hashed_passwords[1]}
     }
 }
 
@@ -24,35 +27,36 @@ authenticator = stauth.Authenticate(
     cookie_expiry_days=1
 )
 
-# Login UI
+# ========== Login Page ==========
 name, authentication_status, username = authenticator.login('Login', 'main')
 
-# ========== App Start ==========
+# ========== Main App ==========
 if authentication_status is False:
-    st.error('Username or password is incorrect')
+    st.error('Username or password is incorrect ❌')
+
 elif authentication_status is None:
-    st.warning('Please enter your username and password')
+    st.warning('Please enter your username and password 🛡️')
+
 elif authentication_status:
 
     authenticator.logout('Logout', 'sidebar')
-    st.sidebar.success(f"Welcome *{name}*!")
+    st.sidebar.success(f"Welcome *{name}*! 🎉")
 
     # ========== Styling ==========
     st.markdown(
         """
-        <h1 style='text-align: center; color: #4CAF50;'>Self-Supervised Learning: YOLO Object Detection</h1>
+        <h1 style='text-align: center; color: #4CAF50;'>Self-Supervised Learning: YOLO Object Detection 🖼️</h1>
         """,
         unsafe_allow_html=True
     )
     st.markdown("---")
 
     # ========== YOLO Model Setup ==========
-
     # Google Drive file ID for YOLO weights
     file_id = "1zT3hJatcXjfQuZBUJvXO7P2eXv1U_qGD"
     weights_path = "yolov3.weights"
 
-    # Download YOLO weights if not already present
+    # Download the YOLO weights if not already present
     if not os.path.exists(weights_path):
         url = f"https://drive.google.com/uc?id={file_id}"
         gdown.download(url, weights_path, quiet=False)
@@ -70,7 +74,7 @@ elif authentication_status:
     layer_names = net.getLayerNames()
     output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
 
-    # ========== Streamlit UI ==========
+    # ========== Upload Image ==========
     uploaded_file = st.file_uploader("Upload an image 📷", type=["jpg", "png", "jpeg"])
 
     if uploaded_file is not None:
