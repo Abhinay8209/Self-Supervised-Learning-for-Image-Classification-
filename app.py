@@ -31,7 +31,7 @@ authenticator = stauth.Authenticate(
 )
 
 # ========== Login Page ==========
-name, authentication_status, username = authenticator.login('Login', location='main')
+name, authentication_status, username = authenticator.login('Login','main')
 
 # ========== Main App ==========
 if authentication_status is False:
