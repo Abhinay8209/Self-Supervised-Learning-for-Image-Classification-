@@ -7,3 +7,4 @@ opencv-python
 numpy
 gdown
 streamlit-authenticator
+flask
