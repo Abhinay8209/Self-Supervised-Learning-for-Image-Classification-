@@ -101,7 +101,7 @@ with open(coco_names, "r") as f:
     class_names = [line.strip() for line in f.readlines()]
 
 # Load YOLO network
-net = cv2.dnn.readNetFromONNX('yolov3.onnx')
+net = cv2.dnn.readNet("yolov3.weights", "yolov3.cfg")
 layer_names = net.getLayerNames()
 output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
 
